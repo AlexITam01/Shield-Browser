@@ -11,8 +11,8 @@ android {
         applicationId = "com.shieldbrowser.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
     }
 
     compileOptions {
@@ -22,9 +22,18 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+
+    packaging {
+        // WireGuard's native library: extract it to disk so it loads on any page-size device.
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
 }
 
 dependencies {
-    // Only dependency: needed for document-start script injection (canvas shield).
+    // Document-start script injection (canvas shield).
     implementation("androidx.webkit:webkit:1.11.0")
+    // WireGuard VPN client library.
+    implementation("com.wireguard.android:tunnel:1.0.20230706")
 }

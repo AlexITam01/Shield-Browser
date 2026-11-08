@@ -5,6 +5,8 @@
 
     <application
         android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:label="Shield Browser"
         android:usesCleartextTraffic="false"
         android:theme="@android:style/Theme.Material.NoActionBar">
@@ -29,5 +31,16 @@
                 <data android:scheme="https" />
             </intent-filter>
         </activity>
+
+        <!-- WireGuard's VPN service. The library's own manifest declares this too; stating it
+             here keeps the app working even if a library update ever stops doing so. -->
+        <service
+            android:name="com.wireguard.android.backend.GoBackend$VpnService"
+            android:exported="false"
+            android:permission="android.permission.BIND_VPN_SERVICE">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>
