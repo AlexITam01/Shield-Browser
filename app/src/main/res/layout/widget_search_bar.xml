@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home-screen search bar. RemoteViews cannot host an EditText, so this is a
+     static bar that opens Shield with the address bar focused when tapped. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_bar"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:padding="8dp"
+    android:background="@drawable/widget_search_background">
+
+    <TextView
+        android:id="@+id/widget_shield"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="🛡"
+        android:textSize="22sp"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp" />
+
+    <TextView
+        android:id="@+id/widget_hint"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:text="Search privately"
+        android:textSize="16sp"
+        android:textColor="#8A93A6" />
+
+    <TextView
+        android:id="@+id/widget_search_icon"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="🔍"
+        android:textSize="20sp"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp" />
+
+</LinearLayout>
