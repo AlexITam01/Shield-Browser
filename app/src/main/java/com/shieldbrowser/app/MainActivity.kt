@@ -3,6 +3,7 @@ package com.shieldbrowser.app
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.DownloadManager
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
@@ -16,6 +17,7 @@ import android.net.Uri
 import android.net.VpnService
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
@@ -29,6 +31,7 @@ import android.view.animation.DecelerateInterpolator
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.webkit.CookieManager
+import android.webkit.URLUtil
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
@@ -48,6 +51,9 @@ import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import java.io.ByteArrayInputStream
 import java.io.File
+import java.io.FileOutputStream
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -105,6 +111,12 @@ class MainActivity : Activity() {
 
     private var railOpen = false
     private val railW: Int get() = dp(76)
+
+    // Fullscreen <video> state (WebChromeClient custom view).
+    private var fullscreenView: View? = null
+    private var fullscreenCallback: WebChromeClient.CustomViewCallback? = null
+    private var fullscreenContainer: FrameLayout? = null
+    private var savedSystemUiVisibility = 0
 
     private var gx = 0f
     private var gy = 0f
@@ -651,6 +663,11 @@ class MainActivity : Activity() {
 
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val u = request?.url ?: return true
+                // PDFs: WebView cannot render them, so download and open in-app.
+                if (u.scheme == "https" && isPdfUrl(u)) {
+                    downloadAndOpenPdf(u.toString())
+                    return true
+                }
                 return when (u.scheme) {
                     "http" -> {
                         view?.loadUrl(u.buildUpon().scheme("https").build().toString())
@@ -683,7 +700,98 @@ class MainActivity : Activity() {
             override fun onReceivedTitle(view: WebView?, title: String?) {
                 tab.title = title ?: ""
             }
+
+            override fun onShowCustomView(view: View?, callback: WebChromeClient.CustomViewCallback?) {
+                if (view == null) return
+                if (fullscreenView != null) {
+                    callback?.onCustomViewHidden()
+                    return
+                }
+                fullscreenView = view
+                fullscreenCallback = callback
+                savedSystemUiVisibility = window.decorView.systemUiVisibility
+                val container = FrameLayout(this@MainActivity)
+                container.setBackgroundColor(Color.BLACK)
+                container.addView(view, FrameLayout.LayoutParams(MATCH, MATCH))
+                fullscreenContainer = container
+                (window.decorView as ViewGroup).addView(container, ViewGroup.LayoutParams(MATCH, MATCH))
+                @Suppress("DEPRECATION")
+                window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_FULLSCREEN
+                    or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                    or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY)
+            }
+
+            override fun onHideCustomView() {
+                exitFullscreen()
+            }
         }
+
+        // Direct .mp4 (and .pdf, as a fallback) links download to Downloads.
+        w.setDownloadListener { url, _, contentDisposition, mimeType, _ ->
+            if (url.isNullOrEmpty()) return@setDownloadListener
+            val uri = try { Uri.parse(url) } catch (e: Exception) { null } ?: return@setDownloadListener
+            val path = uri.path?.lowercase() ?: ""
+            if (!path.endsWith(".mp4") && !path.endsWith(".pdf")) return@setDownloadListener
+            try {
+                val fileName = URLUtil.guessFileName(url, contentDisposition, mimeType)
+                val request = DownloadManager.Request(uri)
+                    .setMimeType(mimeType)
+                    .setTitle(fileName)
+                    .setDescription("Downloading $fileName")
+                    .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                    .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
+                val dm = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+                dm.enqueue(request)
+                toast("Downloading $fileName")
+            } catch (e: Exception) {
+                toast("Download failed: ${e.message ?: e.javaClass.simpleName}")
+            }
+        }
+    }
+
+    private fun isPdfUrl(uri: Uri): Boolean {
+        return uri.path?.lowercase()?.endsWith(".pdf") == true
+    }
+
+    /** Downloads a PDF to cacheDir (forwarding the session cookie) and opens it in-app. */
+    private fun downloadAndOpenPdf(url: String) {
+        toast("Downloading PDF…")
+        Thread {
+            try {
+                val conn = URL(url).openConnection() as HttpURLConnection
+                conn.connectTimeout = 30_000
+                conn.readTimeout = 60_000
+                conn.instanceFollowRedirects = true
+                val cookie = CookieManager.getInstance().getCookie(url)
+                if (!cookie.isNullOrEmpty()) conn.setRequestProperty("Cookie", cookie)
+                conn.connect()
+                if (conn.responseCode !in 200..299) throw java.io.IOException("HTTP ${conn.responseCode}")
+                val file = File(cacheDir, "shield-pdf-${System.currentTimeMillis()}.pdf")
+                conn.inputStream.use { input ->
+                    FileOutputStream(file).use { out -> input.copyTo(out) }
+                }
+                runOnUiThread {
+                    val intent = Intent(this, PdfViewerActivity::class.java)
+                    intent.putExtra(PdfViewerActivity.EXTRA_PATH, file.absolutePath)
+                    startActivity(intent)
+                }
+            } catch (e: Exception) {
+                runOnUiThread { toast("Couldn't open PDF: ${e.message ?: e.javaClass.simpleName}") }
+            }
+        }.start()
+    }
+
+    /** Exits fullscreen video, restoring the previous system-UI flags. Safe to call anytime. */
+    private fun exitFullscreen() {
+        val container = fullscreenContainer ?: return
+        val callback = fullscreenCallback
+        fullscreenContainer = null
+        fullscreenView = null
+        fullscreenCallback = null
+        (window.decorView as ViewGroup).removeView(container)
+        @Suppress("DEPRECATION")
+        window.decorView.systemUiVisibility = savedSystemUiVisibility
+        callback?.onCustomViewHidden()
     }
 
     private fun navigate(input: String) {
@@ -926,6 +1034,7 @@ class MainActivity : Activity() {
     @Suppress("DEPRECATION")
     override fun onBackPressed() {
         when {
+            fullscreenView != null -> exitFullscreen()
             railOpen -> closeRail()
             web.canGoBack() -> web.goBack()
             tabs.size > 1 -> closeTab(activeIndex)
