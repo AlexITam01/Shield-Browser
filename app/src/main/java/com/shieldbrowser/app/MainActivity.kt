@@ -73,6 +73,11 @@ private const val MAX_TABS = 10
 
 class MainActivity : Activity() {
 
+    companion object {
+        /** Set by the home-screen search widget: focus the address bar and show the keyboard. */
+        const val EXTRA_FOCUS_SEARCH = "com.shieldbrowser.app.FOCUS_SEARCH"
+    }
+
     private lateinit var prefs: SharedPreferences
     private lateinit var blocker: TrackerBlocker
     private lateinit var root: LinearLayout
@@ -137,10 +142,16 @@ class MainActivity : Activity() {
         showActive()
         val data = intent?.dataString
         if (data != null) navigate(data) else loadStart(first)
+        if (intent?.getBooleanExtra(EXTRA_FOCUS_SEARCH, false) == true) {
+            ui.post { showKeyboard() }
+        }
     }
 
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
+        if (intent?.getBooleanExtra(EXTRA_FOCUS_SEARCH, false) == true) {
+            ui.post { showKeyboard() }
+        }
         val data = intent?.dataString ?: return
         openNewTab(data)
     }
