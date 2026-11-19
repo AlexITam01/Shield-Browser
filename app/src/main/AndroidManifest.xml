@@ -45,6 +45,11 @@
                 android:resource="@xml/shield_search_widget_info" />
         </receiver>
 
+        <activity
+            android:name=".PdfViewerActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout|uiMode" />
+
         <!-- WireGuard's VPN service. The library's own manifest declares this too; stating it
              here keeps the app working even if a library update ever stops doing so. -->
         <service
